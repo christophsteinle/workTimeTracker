@@ -1,0 +1,198 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TimeTracker – Today & Month</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a; --fg: #e5e7eb; --muted: #9ca3af;
+      --primary: #60a5fa; --accent: #34d399; --warn: #f59e0b; --error: #ef4444;
+      --panel: #111827; --border: #1f2937;
+    }
+    html, body { height: 100%; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+    header { padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; align-items: center; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    main { padding: 1rem 2rem; }
+
+    fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; background: var(--panel); }
+    legend { padding: 0 .5rem; color: var(--muted); }
+
+    input, select, button {
+      padding: .5rem .6rem; margin: .2rem; border-radius: 6px; border: 1px solid var(--border);
+      background: #0b1220; color: var(--fg);
+    }
+    button.primary { background: var(--primary); color: #0b1220; border: none; }
+    button.warn { background: var(--warn); color: #0b1220; border: none; }
+    button.danger { background: var(--error); color: #0b1220; border: none; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    .grid { display: grid; gap: .75rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .stat { background: #0b1220; border: 1px solid var(--border); padding: .75rem 1rem; border-radius: 8px; min-width: 12rem; }
+    .stat .label { color: var(--muted); font-size: .85rem; }
+    .stat .value { font-size: 1.1rem; margin-top: .2rem; }
+
+    table { border-collapse: collapse; width: 100%; margin-top: .5rem; }
+    th, td { border: 1px solid var(--border); padding: .5rem; vertical-align: top; }
+    th { background: #0b1220; }
+    .badge { display: inline-block; background: #1f2937; border: 1px solid var(--border); padding: .2rem .4rem; border-radius: 4px; margin-right: .25rem; }
+    .badge.warn { border-color: var(--warn); color: var(--warn); }
+    .badge.ok { border-color: var(--accent); color: var(--accent); }
+
+    .day-detail { background: #0b1220; border: 1px dashed var(--border); padding: .75rem; border-radius: 6px; margin-top: .5rem; }
+    .detail-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .list { border: 1px dashed var(--border); border-radius: 6px; padding: .5rem; }
+    .list h4 { margin: 0 0 .5rem; font-size: .95rem; color: var(--muted); }
+
+    .row { display: grid; grid-template-columns: 7rem 7rem 1fr auto; gap: .5rem; align-items: center; margin: .3rem 0; }
+    .row .time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .error { color: var(--error); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TimeTracker</h1>
+    <div class="muted">Today & Month Overview</div>
+  </header>
+
+  <main>
+    <!-- Health -->
+    <fieldset>
+      <legend>Health</legend>
+      <button id="check-btn">Check /api/health</button>
+      <pre id="health-output" style="white-space:pre-wrap; margin: .5rem 0;"></pre>
+    </fieldset>
+
+    <!-- Today Panel -->
+    <fieldset>
+      <legend>Today</legend>
+      <div class="grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+        <div>
+          <div class="stat"><div class="label">Date</div><div class="value" id="today-date">—</div></div>
+        </div>
+        <div>
+          <div class="stat"><div class="label">Recorded (finalized)</div><div class="value" id="today-recorded">00:00</div></div>
+        </div>
+        <div>
+          <div class="stat"><div class="label">Running (live)</div><div class="value" id="today-running">00:00</div></div>
+        </div>
+      </div>
+      <div class="stats" style="margin-top:.5rem;">
+        <div class="stat">
+          <div class="label">Effective (recorded + running)</div>
+          <div class="value" id="today-effective">00:00</div>
+        </div>
+        <div class="stat">
+          <div class="label">Timer</div>
+          <div class="value">
+            <button class="primary" id="start-btn">Start work</button>
+            <button class="warn" id="stop-btn" style="display:none;">Stop work</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project/Task selection and notes -->
+      <div class="row" style="margin-top:.5rem; grid-template-columns: 12rem 12rem 1fr;">
+        <label>Project&nbsp;<select id="today-project"></select></label>
+        <label>Task&nbsp;<select id="today-task"></select></label>
+        <input type="text" id="today-notes" placeholder="Notes (optional)" style="width: 100%;">
+      </div>
+
+      <div class="detail-columns" style="margin-top:.75rem;">
+        <div class="list">
+          <h4>Today’s work intervals</h4>
+          <table style="width:100%;">
+            <thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Project</th><th>Task</th><th>Notes</th></tr></thead>
+            <tbody id="today-intervals-tbody"></tbody>
+          </table>
+        </div>
+        <div class="list">
+          <h4>Add a break</h4>
+          <div class="row">
+            <input type="time" id="break-start" placeholder="Start">
+            <input type="time" id="break-end" placeholder="End">
+            <input type="number" min="1" id="break-duration" placeholder="Or duration (min)">
+            <div class="actions"><button class="primary" id="add-break-btn">Add break</button></div>
+          </div>
+          <div class="error" id="break-error"></div>
+
+          <h4 style="margin-top:.75rem;">Today’s breaks</h4>
+          <table style="width:100%;">
+            <thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Notes</th></tr></thead>
+            <tbody id="today-breaks-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Month Controls -->
+    <fieldset>
+      <legend>Month Controls</legend>
+      <div class="grid">
+        <div>
+          <label>Year<br><input id="year" type="number" min="1970" max="9999"></label>
+        </div>
+        <div>
+          <label>Month<br>
+            <select id="month">
+              <option value="1">January</option><option value="2">February</option>
+              <option value="3">March</option><option value="4">April</option>
+              <option value="5">May</option><option value="6">June</option>
+              <option value="7">July</option><option value="8">August</option>
+              <option value="9">September</option><option value="10">October</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+          </label>
+        </div>
+        <div>
+          <button id="prev-month">◀ Prev</button>
+          <button id="next-month">Next ▶</button>
+        </div>
+        <div>
+          <button class="primary" id="load-month">Load Overview</button>
+        </div>
+      </div>
+
+      <div class="stats" id="month-stats" style="margin-top:.75rem;"></div>
+
+      <div style="margin-top:.75rem;">
+        <table id="month-table">
+          <thead>
+            <tr>
+              <th style="width:10rem;">Date</th><th>Weekday</th><th>Work</th><th>Breaks</th><th>Recorded</th>
+              <th>First Start</th><th>Last End</th><th>Warnings</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </fieldset>
+
+    <!-- Export -->
+    <fieldset>
+      <legend>Export</legend>
+      <div class="grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+        <div>
+          <strong>Month (uses Year/Month above)</strong><br>
+          <button class="primary" id="btn-month-xlsx">Download Month (XLSX)</button><br>
+          <button id="btn-month-days-csv">Days CSV</button>
+          <button id="btn-month-intervals-csv">Intervals CSV</button>
+          <button id="btn-month-breaks-csv">Breaks CSV</button>
+          <button id="btn-month-projects-csv">Projects CSV</button>
+        </div>
+        <div>
+          <strong>Year</strong><br>
+          <label>Year <input id="export-year" type="number" min="1970" max="9999"></label><br>
+          <button class="primary" id="btn-year-xlsx">Download Year (XLSX)</button>
+        </div>
+      </div>
+    </fieldset>
+  </main>
+
+  <!-- Orchestration script (ES modules) -->
+  ./js/main.js</script>
+</body>
+</html>
